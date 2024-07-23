@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ============================ SETTINGS ============================= -->
+
+    <!-- Node frequency: the frequency [Hz] which rate.sleep() function will
+    attempt to maintain in the main_loop. -->
+    <arg 
+    name="node_frequency" 
+    default="100"/>
+
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+
+
+    <!-- Controller feedback: -->
+    <node 
+    pkg="openhand_node" 
+    type="openhand_model_o.py" 
+    name="openhand_model_o" 
+    output="screen">
+        <param 
+        name="node_frequency" 
+        value="$(arg node_frequency)"/>
+    </node>
+</launch>
