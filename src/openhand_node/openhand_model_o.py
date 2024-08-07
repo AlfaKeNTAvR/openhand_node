@@ -40,9 +40,20 @@ class OpenHandModelO:
         # NOTE: By default all new class CONSTANTS should be private.
         self.__NODE_NAME = node_name
 
-        self.__MAX_INDEX_FINGER = 0.7
-        self.__MAX_MIDDLE_FINGER = 0.7
-        self.__MAX_THUMB_FINGER = 0.7
+        self.__FINGER_POSE_LIMITS = {
+            'index': {
+                'min': 0,
+                'max': 0.7,
+            },
+            'middle': {
+                'min': 0,
+                'max': 0.7,
+            },
+            'thumb': {
+                'min': 0,
+                'max': 0.7,
+            },
+        }
 
         self.__T = hands.Model_O(
             "/dev/ttyUSB0",
@@ -52,9 +63,9 @@ class OpenHandModelO:
             2,
             "XM",
             0.0,
-            0.08,
+            0.1,
             -0.05,
-            0.23,
+            0.1,
         )
 
         # # Public CONSTANTS:
@@ -62,9 +73,35 @@ class OpenHandModelO:
         # # Private variables:
         # NOTE: By default all new class variables should be private.
         self.__adduct = 0.0
-        self.__index_finger = 0.0
-        self.__middle_finger = 0.0
-        self.__thumb_finger = 0.0
+        self.__finger_pose = {
+            'index': 0.0,
+            'middle': 0.0,
+            'thumb': 0.0,
+        }
+        self.__finger_velocity = {
+            'index': 0.1,
+            'middle': 0.1,
+            'thumb': 0.1,
+        }
+        self.__finger_direction = {
+            'index': 0,
+            'middle': 0,
+            'thumb': 0,
+        }
+        self.__finger_action_threshold = {
+            'index': {
+                'close': 3,
+                'open': 7,
+            },
+            'middle': {
+                'close': 3,
+                'open': 7,
+            },
+            'thumb': {
+                'close': 3,
+                'open': 7,
+            },
+        }
 
         # # Public variables:
 
@@ -137,6 +174,10 @@ class OpenHandModelO:
             rospy.Duration(1.0 / 100),
             self.__send_motor_commands,
         )
+        rospy.Timer(
+            rospy.Duration(1.0 / 100),
+            self.__update_finger_poses,
+        )
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -164,33 +205,39 @@ class OpenHandModelO:
 
         """
 
-        self.__index_finger = np.clip(
-            message.data,
-            0.0,
-            self.__MAX_INDEX_FINGER,
-        )
+        # self.__index_finger = np.clip(
+        #     message.data,
+        #     0.0,
+        #     self.__MAX_INDEX_FINGER,
+        # )
+
+        self.__select_direction(message.data, 'index')
 
     def __middle_finger_callback(self, message):
         """
 
         """
 
-        self.__middle_finger = np.clip(
-            message.data,
-            0.0,
-            self.__MAX_MIDDLE_FINGER,
-        )
+        # self.__middle_finger = np.clip(
+        #     message.data,
+        #     0.0,
+        #     self.__MAX_MIDDLE_FINGER,
+        # )
+
+        self.__select_direction(message.data, 'middle')
 
     def __thumb_finger_callback(self, message):
         """
 
         """
 
-        self.__thumb_finger = np.clip(
-            message.data,
-            0.0,
-            self.__MAX_THUMB_FINGER,
-        )
+        # self.__thumb_finger = np.clip(
+        #     message.data,
+        #     0.0,
+        #     self.__MAX_THUMB_FINGER,
+        # )
+
+        self.__select_direction(message.data, 'thumb')
 
     # # Timer callbacks:
     def __send_motor_commands(self, event):
@@ -199,9 +246,18 @@ class OpenHandModelO:
         """
 
         self.__T.moveMotor(0, self.__adduct)
-        self.__T.moveMotor(1, self.__index_finger)
-        self.__T.moveMotor(2, self.__middle_finger)
-        self.__T.moveMotor(3, self.__thumb_finger)
+        self.__T.moveMotor(1, self.__finger_pose['index'])
+        self.__T.moveMotor(2, self.__finger_pose['middle'])
+        self.__T.moveMotor(3, self.__finger_pose['thumb'])
+
+    def __update_finger_poses(self, event):
+        """
+        
+        """
+
+        self.__update_finger_pose('index', 1.0 / 100)
+        self.__update_finger_pose('middle', 1.0 / 100)
+        self.__update_finger_pose('thumb', 1.0 / 100)
 
     # # Private methods:
     # NOTE: By default all new class methods should be private.
@@ -272,6 +328,35 @@ class OpenHandModelO:
             self.__is_initialized = False
 
         self.__node_is_initialized.publish(self.__is_initialized)
+
+    def __select_direction(self, value, finger_name):
+        """
+        
+        """
+
+        if value < self.__finger_action_threshold[finger_name]['close']:
+            self.__finger_direction[finger_name] = 1
+
+        elif value > self.__finger_action_threshold[finger_name]['open']:
+            self.__finger_direction[finger_name] = -1
+
+        else:
+            self.__finger_direction[finger_name] = 0
+
+    def __update_finger_pose(self, finger_name, time_step):
+        """
+        
+        """
+
+        self.__finger_pose[finger_name] = np.clip(
+            (
+                self.__finger_pose[finger_name]
+                + time_step * self.__finger_direction[finger_name]
+                * self.__finger_velocity[finger_name]
+            ),
+            self.__FINGER_POSE_LIMITS[finger_name]['min'],
+            self.__FINGER_POSE_LIMITS[finger_name]['max'],
+        )
 
     # # Public methods:
     # NOTE: By default all new class methods should be private.
